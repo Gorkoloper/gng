@@ -17,21 +17,22 @@ const initLenis = () => {
         infinite: false,
     });
 
-    function raf(time) {
-        lenis.raf(time);
-        requestAnimationFrame(raf);
-    }
-    requestAnimationFrame(raf);
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time)=>{
+        lenis.raf(time * 1000);
+    });
+    gsap.ticker.fps(60);
 };
 
 // Check if touch device
 const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
 
-// Initialize Custom Cursor (only if NOT a touch device)
-if (!isTouchDevice) {
+// Initialize Custom Cursor (only if NOT a touch device and pointer is fine)
+if (!isTouchDevice && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
     const cursor = document.createElement('div');
     cursor.classList.add('custom-cursor');
     document.body.appendChild(cursor);
+    document.body.classList.add('has-custom-cursor');
 
     document.addEventListener('mousemove', (e) => {
         cursor.style.left = e.clientX + 'px';
@@ -68,6 +69,13 @@ const initMobileMenu = () => {
             nav.classList.toggle('open');
             hamburger.classList.toggle('active');
             header.classList.toggle('menu-open');
+            if (nav.classList.contains('open')) {
+                document.body.style.overflow = 'hidden';
+                if (typeof lenis !== 'undefined' && lenis) lenis.stop();
+            } else {
+                document.body.style.overflow = '';
+                if (typeof lenis !== 'undefined' && lenis) lenis.start();
+            }
         });
 
         // Close menu on link click
@@ -77,6 +85,8 @@ const initMobileMenu = () => {
                 nav.classList.remove('open');
                 hamburger.classList.remove('active');
                 header.classList.remove('menu-open');
+                document.body.style.overflow = '';
+                if (typeof lenis !== 'undefined' && lenis) lenis.start();
             });
         });
     }
@@ -106,18 +116,22 @@ const animateOnScroll = () => {
     }
     
     if(document.querySelector('.hero-title span')) {
-        tl.to('.hero-title span', { y: 0, duration: 1, stagger: 0.2, ease: 'power4.out' }, "-=1");
+        tl.from('.hero-title span', { y: '100%', duration: 1, stagger: 0.2, ease: 'power4.out' }, "-=1");
     }
 
     if(document.querySelector('.hero-subtitle')) {
-        tl.to('.hero-subtitle, .hero .btn', { opacity: 1, y: 0, duration: 1, stagger: 0.2, ease: 'power3.out' }, "-=0.8");
+        tl.fromTo('.hero-subtitle', 
+            { opacity: 0, y: 25 }, 
+            { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', clearProps: 'all' }, 
+            "-=0.8"
+        );
     }
 
-    // Scroll Animations
+    // Scroll Animations - Fast, Responsive, Independent
     if(document.querySelector('.about-text')) {
         gsap.from('.about-text h2, .about-text p, .about-text .btn', {
-            scrollTrigger: { trigger: '.about', start: 'top 70%' },
-            y: 50, opacity: 0, duration: 1, stagger: 0.2, ease: 'power3.out'
+            scrollTrigger: { trigger: '.about', start: 'top 92%' },
+            y: 25, opacity: 0, duration: 0.5, stagger: 0.1, ease: 'power2.out', clearProps: 'all'
         });
     }
 
@@ -128,17 +142,27 @@ const animateOnScroll = () => {
         });
     }
 
-    const cards = document.querySelectorAll('.z-row, .minimal-card, .gallery-item, .service-card, .founder-card, .process-step, .team-member, .contact-item');
-    if (cards.length > 0) {
-        gsap.from(cards, {
-            scrollTrigger: { trigger: cards[0], start: 'top 85%' },
-            y: 50, opacity: 0, duration: 0.8, stagger: 0.1, ease: 'power3.out',
-            clearProps: 'all',
-            onComplete: () => {
-                cards.forEach(card => card.classList.add('ready'));
+    const cards = document.querySelectorAll('.z-row, .minimal-card, .gallery-item, .service-card, .founder-card, .founder-card-premium, .contact-card-premium, .process-step, .team-member, .contact-item');
+    cards.forEach((card) => {
+        gsap.fromTo(card, 
+            { y: 30, opacity: 0 }, 
+            {
+                scrollTrigger: { 
+                    trigger: card, 
+                    start: 'top 96%',
+                    toggleActions: 'play none none none'
+                },
+                y: 0, 
+                opacity: 1, 
+                duration: 0.45, 
+                ease: 'power2.out',
+                clearProps: 'all',
+                onComplete: () => {
+                    card.classList.add('ready');
+                }
             }
-        });
-    }
+        );
+    });
 };
 
 // Lightbox Gallery Logic
@@ -156,7 +180,7 @@ const initLightbox = () => {
             <img src="" alt="Gallery Preview" class="lightbox-img">
         </div>
         <button class="lightbox-nav lightbox-next" aria-label="Sonraki">&#10095;</button>
-        <div class="lightbox-counter">1 / 10</div>
+        <div class="lightbox-counter"></div>
     `;
     document.body.appendChild(modal);
 
@@ -170,9 +194,14 @@ const initLightbox = () => {
     let currentIndex = 0;
 
     const setupGallery = (clickedItem) => {
-        const parentGrid = clickedItem.closest('.gallery-grid, .z-layout') || document.body;
-        const imgElements = parentGrid.querySelectorAll('.gallery-img, .z-img, .about-image');
-        images = Array.from(imgElements).map(img => ({
+        let imgElements = [];
+        if (clickedItem.classList.contains('about-image-wrapper')) {
+            imgElements = [clickedItem.querySelector('img')];
+        } else {
+            const parentGrid = clickedItem.closest('.gallery-grid, .z-layout') || document.body;
+            imgElements = parentGrid.querySelectorAll('.gallery-img, .z-img, .about-image');
+        }
+        images = Array.from(imgElements).filter(Boolean).map(img => ({
             src: img.getAttribute('src'),
             alt: img.getAttribute('alt') || 'GNG Mühendislik Proje'
         }));
@@ -183,6 +212,7 @@ const initLightbox = () => {
             currentIndex = images.findIndex(item => item.src === src);
             if (currentIndex === -1) currentIndex = 0;
         }
+        counter.textContent = `${currentIndex + 1} / ${images.length}`;
     };
 
     const updateLightbox = () => {
